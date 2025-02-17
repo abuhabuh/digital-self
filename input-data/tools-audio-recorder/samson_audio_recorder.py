@@ -1,174 +1,221 @@
-from datetime import datetime
 import io
+import time
+from datetime import datetime
 import os
 import shutil
-import time
+import pdb
 
+import sounddevice as sd
 import numpy as np
 from pydub import AudioSegment
-import sounddevice as sd
 import wave
 
 
 class AudioRecorder:
-    def __init__(self, threshold_db=-30, sample_rate=44100, channels=1):
+    def __init__(self, threshold_db=-30, sample_rate=44100, channels=1, amplification=1.0):
         self.threshold_db = threshold_db
         self.sample_rate = sample_rate
         self.channels = channels
+        self.amplification = amplification
         self.chunk_duration = 0.1  # seconds
         self.chunk_samples = int(self.sample_rate * self.chunk_duration)
         self.mp3_buffer = AudioSegment.empty()
         self.current_file = None
         self.recording = False
         self.silence_duration = 0
+        self.stream = None
+        self.device_id = None
+        self.running = False
+        self.last_device_name = None
+        # Whether we've written audio to the buffer (and not just silence)
+        self.wrote_audio = False
+
+    def get_bluetooth_device(self):
+        devices = sd.query_devices()
+        for i, device in enumerate(devices):
+            if 'Samson RXD wireless receiver' == device['name']:
+                self.last_device_name = device['name']
+                return i
+        raise ValueError("No Bluetooth input device found")
 
     def get_meter_string(self, db):
-        """Create a visual meter string based on dB value"""
-        # Define meter parameters
-        meter_width = shutil.get_terminal_size().columns - 10  # Leave space for dB value
+        meter_width = shutil.get_terminal_size().columns - 10
         min_db = -60
         max_db = 0
 
-        # Calculate how many blocks to fill
-        db = max(min_db, min(db, max_db))  # Clamp value
+        db = max(min_db, min(db, max_db))
         fill_count = int((db - min_db) * meter_width / (max_db - min_db))
 
-        # Create the meter string with different colors based on level
         meter = ""
         for i in range(meter_width):
             if i < fill_count:
-                if i / meter_width < 0.7:  # Green zone
+                if i / meter_width < 0.7:
                     meter += "\033[92m█\033[0m"
-                elif i / meter_width < 0.9:  # Yellow zone
+                elif i / meter_width < 0.9:
                     meter += "\033[93m█\033[0m"
-                else:  # Red zone
+                else:
                     meter += "\033[91m█\033[0m"
             else:
                 meter += "░"
 
         return f"{meter} {db:>5.1f}dB"
 
-
     def audio_callback(self, indata, frames, time, status):
         if status:
-            print(f"Status: {status}")
+            if isinstance(status, sd.CallbackAbort):
+                print("\nDevice disconnected. Attempting to reconnect...")
+                self.handle_disconnect()
+                return
+            print(f"\nStatus: {status}")
 
-        # Convert to float32 if not already
-        audio_data = indata.copy()
-        if audio_data.dtype != np.float32:
-            audio_data = audio_data.astype(np.float32)
+        if not self.recording:
+            self.start_new_recording()
 
-        # Calculate volume in dB
-        rms = np.sqrt(np.mean(audio_data**2))
-        db = 20 * np.log10(rms) if rms > 0 else -100
+        try:
+            # Convert to float32 if not already
+            audio_data = indata.copy()
+            if audio_data.dtype != np.float32:
+                audio_data = audio_data.astype(np.float32)
 
-        print("\033[A\033[K" + self.get_meter_string(db))
+            # Calculate volume in dB
+            rms = np.sqrt(np.mean(audio_data**2))
+            db = 20 * np.log10(rms) if rms > 0 else -100
 
-        # Convert numpy array to wav bytes
-        bytes_io = io.BytesIO()
-        with wave.open(bytes_io, 'wb') as wf:
-            wf.setnchannels(self.channels)
-            wf.setsampwidth(2)  # 16-bit audio
-            wf.setframerate(self.sample_rate)
-            wf.writeframes((audio_data * 32767).astype(np.int16))
+            # Print the meter
+            print("\033[A\033[K" + self.get_meter_string(db))
 
-        # Convert wav bytes to AudioSegment and add to buffer
-        bytes_io.seek(0)
-        segment = AudioSegment.from_wav(bytes_io)
+            # Convert numpy array to wav bytes
+            bytes_io = io.BytesIO()
+            with wave.open(bytes_io, 'wb') as wf:
+                wf.setnchannels(self.channels)
+                wf.setsampwidth(2)
+                wf.setframerate(self.sample_rate)
+                wf.writeframes((audio_data * 32767).astype(np.int16))
 
-        if db > self.threshold_db:
-            if not self.recording:
-                self.start_new_recording()
-            self.silence_duration = 0
+            # Convert wav bytes to AudioSegment and add to buffer
+            bytes_io.seek(0)
+            segment = AudioSegment.from_wav(bytes_io)
 
-            self.mp3_buffer += segment
+            if db > self.threshold_db:
+                self.wrote_audio = True
+                # Amplify the audio if there's something to record
+                audio_data = np.clip(audio_data * self.amplification, -1.0, 1.0)
 
-            # Check file size and create new file if needed
-            if len(self.mp3_buffer.raw_data) >= 50 * 1024 * 1024:  # 50MB
-                self.save_current_file()
-                self.start_new_recording()
-        else:
-            self.silence_duration += self.chunk_duration
-            if self.recording:
-                if self.silence_duration <= 2.0:  # Keep up to 2 seconds of silence
-                    self.mp3_buffer += segment
+                self.silence_duration = 0
+                self.mp3_buffer += segment
+
+                if len(self.mp3_buffer.raw_data) >= 15 * 1024 * 1024:
+                    self.save_current_file()
+                    self.start_new_recording()
+            else:
+                self.silence_duration += self.chunk_duration
+                if self.recording:
+                    if self.silence_duration <= 2.0:
+                        self.mp3_buffer += segment
+
+        except Exception as e:
+            print(f"\nError in audio callback: {e}")
+            self.handle_disconnect()
+
+    def handle_disconnect(self):
+        """Handle device disconnection and initiate reconnection"""
+        if self.stream:
+            print(f'Device disconnect detected - closing stream and trying reconnect')
+            self.stream.close()
+        self.stream = None
+
+        self.reconnect_device()
+
+    def reconnect_device(self):
+        """Attempt to reconnect to the Bluetooth device"""
+        while self.running:
+            try:
+                # Reset sounddevice because it retains memory of initial device connection
+                sd._terminate()
+                sd._initialize()
+                # Try to find the same device that was previously connected
+                devices = sd.query_devices()
+                found_device = False
+                for i, device in enumerate(devices):
+                    if self.last_device_name and self.last_device_name == device['name']:
+                        self.device_id = i
+                        found_device = True
+                        break
+
+                if not found_device:
+                    return
+
+                # Test the device by creating a new stream
+                self.create_stream()
+                print(f"\nReconnected to device: {sd.query_devices(self.device_id)['name']}")
+                print()  # Add an extra line for the meter
+                return
+
+            except Exception as e:
+                print(f"\rAttempting to reconnect... ({e})", end="")
+                time.sleep(1)
+
+    def create_stream(self):
+        """Create a new audio input stream"""
+        if self.stream:
+            self.stream.close()
+
+        self.stream = sd.InputStream(
+            device=self.device_id,
+            channels=self.channels,
+            samplerate=self.sample_rate,
+            callback=self.audio_callback,
+            blocksize=self.chunk_samples
+        )
+        self.stream.start()
 
     def start_new_recording(self):
+        self.wrote_audio = False
         self.recording = True
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.current_file = f"recording_{timestamp}.mp3"
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        self.current_file = f"{timestamp}_recording.mp3"
         self.mp3_buffer = AudioSegment.empty()
-        # print(f"Started new recording: {self.current_file}")
+        print(f"\nStarted new recording: {self.current_file}")
+        print()  # Add an extra line for the meter
 
     def save_current_file(self):
-        print(f'\033[A\033[K saving file')
+        if not self.wrote_audio:
+            return
+
+        out_dir = '/Users/john.wang/Documents/00 my outputs'
         if self.mp3_buffer and self.current_file:
-            os.makedirs("/Users/john.wang/Documents/00\ my\ outputs", exist_ok=True)
-            filepath = os.path.join("recordings", self.current_file)
+            os.makedirs(out_dir, exist_ok=True)
+            filepath = os.path.join(out_dir, self.current_file)
             self.mp3_buffer.export(filepath, format="mp3")
-            # print(f"Saved recording: {filepath}")
+            print(f"\nSaved recording: {filepath}")
             self.mp3_buffer = AudioSegment.empty()
 
-    def start_recording(self, device_id):
+    def start_recording(self):
         try:
-            with sd.InputStream(
-                device=device_id,
-                channels=self.channels,
-                samplerate=self.sample_rate,
-                callback=self.audio_callback,
-                blocksize=self.chunk_samples
-            ):
-                # print("Recording started. Press Ctrl+C to stop.")
-                while True:
-                    time.sleep(1)
+            self.running = True
+            self.device_id = self.get_bluetooth_device()
+            print(f"Using device: {sd.query_devices(self.device_id)['name']}")
+
+            self.create_stream()
+
+            while self.running:
+                if not self.stream or not self.stream.active:
+                    self.handle_disconnect()
+                time.sleep(1)
 
         except KeyboardInterrupt:
             print("\nRecording stopped.")
+            self.running = False
             if self.recording:
                 self.save_current_file()
+            if self.stream:
+                self.stream.close()
         except Exception as e:
             print(f"Error: {e}")
-
-
-def get_bluetooth_device():
-    devices = sd.query_devices()
-    for i, device in enumerate(devices):
-        if 'Samson RXD wireless receiver' == device['name']:
-            return i
-    return None
-
-
-def main():
-    device_id = get_bluetooth_device()
-    if device_id is None:
-        print(f'Samson mic device not found')
-        return
-    device = sd.query_devices(device_id)
-
-    print(f"Found device: {device['name']}")
-
-    """
-    Samson Device
-    {
-        'name': 'Samson RXD wireless receiver',
-        'index': 0,
-        'hostapi': 0,
-        'max_input_channels': 1,
-        'max_output_channels': 0,
-        'default_low_input_latency': 0.004583333333333333,
-        'default_low_output_latency': 0.01,
-        'default_high_input_latency': 0.013916666666666667,
-        'default_high_output_latency': 0.1,
-        'default_samplerate': 48000.0
-    }
-    """
-    recorder = AudioRecorder(
-        threshold_db=-50,
-        sample_rate=device['default_samplerate'],
-        channels=device['max_input_channels'],
-    )
-    recorder.start_recording(device_id)
-
+            self.running = False
+            if self.stream:
+                self.stream.close()
 
 if __name__ == "__main__":
-    main()
+    recorder = AudioRecorder(threshold_db=-50, amplification=2)
+    recorder.start_recording()
