@@ -1,1 +1,10 @@
+# Mac
+.DS_Store
+
+# python
+venv
+**.swp
+
+# VI
 tags
+
