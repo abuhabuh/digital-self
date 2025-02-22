@@ -76,9 +76,7 @@ def main():
         lr_scheduler_type="cosine",
         evaluation_strategy="no",
         remove_unused_columns=True,
-        # Add ddp args to prevent meta device issues
-        ddp_find_unused_parameters=False,
-        data_parallel_backend="ddp",
+        ddp_find_unused_parameters=False
     )
 
     # Load and prepare data
@@ -90,6 +88,10 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True, token=HF_TOKEN)
     tokenizer.pad_token = tokenizer.eos_token
 
+    # Determine the best available device
+    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    print(f"Using device: {device}")
+
     # Load model with correct device initialization
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
@@ -98,7 +100,7 @@ def main():
         trust_remote_code=True,
         use_cache=False,
         token=HF_TOKEN,
-    ).to("mps")  # Explicitly move to MPS device for M1 Mac
+    ).to(device)
 
     # Apply LoRA adapters
     model = get_peft_model(model, lora_config)
@@ -128,7 +130,7 @@ def main():
             'input_ids': torch.stack([f['input_ids'] for f in data]),
             'attention_mask': torch.stack([f['attention_mask'] for f in data])
         }
-        return {k: v.to("mps") for k, v in batch.items()}
+        return {k: v.to(device) for k, v in batch.items()}
 
     # Initialize trainer
     trainer = Trainer(
