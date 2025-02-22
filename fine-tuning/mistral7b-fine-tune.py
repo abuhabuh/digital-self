@@ -37,7 +37,6 @@ def load_chat_data(file_paths: List[str]) -> List[Dict]:
             "text": formatted_convo.strip()
         })
 
-    print(f'conversations len: {len(conversations)}')
     return conversations
 
 def prepare_training_data(conversations: List[Dict]) -> Dataset:
@@ -74,10 +73,12 @@ def main():
         max_grad_norm=0.3,
         warmup_ratio=0.03,
         gradient_checkpointing=True,  # Enable gradient checkpointing
-        # Remove fp16 training as it might cause issues on M1
         lr_scheduler_type="cosine",
         evaluation_strategy="no",
         remove_unused_columns=True,
+        # Add ddp args to prevent meta device issues
+        ddp_find_unused_parameters=False,
+        data_parallel_backend="ddp",
     )
 
     # Load and prepare data
@@ -89,15 +90,15 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True, token=HF_TOKEN)
     tokenizer.pad_token = tokenizer.eos_token
 
-    # Load model with reduced precision
+    # Load model with correct device initialization
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
-        torch_dtype=torch.float16,  # Use float16 instead of 8-bit quantization
-        device_map="auto",
+        torch_dtype=torch.float16,
+        device_map=None,  # Don't use auto device mapping
         trust_remote_code=True,
-        use_cache=False,  # Disable KV cache for training
+        use_cache=False,
         token=HF_TOKEN,
-    )
+    ).to("mps")  # Explicitly move to MPS device for M1 Mac
 
     # Apply LoRA adapters
     model = get_peft_model(model, lora_config)
@@ -121,13 +122,20 @@ def main():
         remove_columns=dataset.column_names
     )
 
+    # Function to move batch to correct device
+    def collate_fn(data):
+        batch = {
+            'input_ids': torch.stack([f['input_ids'] for f in data]),
+            'attention_mask': torch.stack([f['attention_mask'] for f in data])
+        }
+        return {k: v.to("mps") for k, v in batch.items()}
+
     # Initialize trainer
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_dataset,
-        data_collator=lambda data: {'input_ids': torch.stack([f['input_ids'] for f in data]),
-                                  'attention_mask': torch.stack([f['attention_mask'] for f in data])}
+        data_collator=collate_fn
     )
 
     # Start training
@@ -139,4 +147,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
