@@ -104,11 +104,12 @@ class AudioRecorder:
                 self.silence_duration = 0
                 self.mp3_buffer += segment
 
-                if len(self.mp3_buffer.raw_data) >= 15 * 1024 * 1024:
-                    self.save_current_file()
-                    self.start_new_recording()
             else:
                 self.silence_duration += self.chunk_duration
+                if self.silence_duration > 2.0:
+                    if len(self.mp3_buffer.raw_data) >= 135 * 1024 * 1024:
+                        self.save_current_file()
+                        self.start_new_recording()
                 if self.recording:
                     if self.silence_duration <= 2.0:
                         self.mp3_buffer += segment
