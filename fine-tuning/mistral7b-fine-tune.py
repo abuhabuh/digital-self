@@ -76,7 +76,8 @@ def main():
         lr_scheduler_type="cosine",
         evaluation_strategy="no",
         remove_unused_columns=True,
-        ddp_find_unused_parameters=False
+        ddp_find_unused_parameters=False,
+        report_to="none"  # Disable wandb logging
     )
 
     # Load and prepare data
@@ -109,12 +110,12 @@ def main():
     model.gradient_checkpointing_enable()
 
     def tokenize_function(examples):
+        """Tokenize the text and return pytorch tensors."""
         return tokenizer(
             examples["text"],
             padding="max_length",
             truncation=True,
-            max_length=512,
-            return_tensors="pt"
+            max_length=512
         )
 
     # Tokenize dataset
@@ -125,12 +126,17 @@ def main():
     )
 
     # Function to move batch to correct device
-    def collate_fn(data):
-        batch = {
-            'input_ids': torch.stack([f['input_ids'] for f in data]),
-            'attention_mask': torch.stack([f['attention_mask'] for f in data])
+    def collate_fn(examples):
+        # Convert input_ids and attention_mask to tensors
+        input_ids = torch.tensor([example['input_ids'] for example in examples])
+        attention_mask = torch.tensor([example['attention_mask'] for example in examples])
+
+        # Move to appropriate device
+        return {
+            'input_ids': input_ids.to(device),
+            'attention_mask': attention_mask.to(device),
+            'labels': input_ids.to(device)  # For casual language modeling
         }
-        return {k: v.to(device) for k, v in batch.items()}
 
     # Initialize trainer
     trainer = Trainer(
@@ -143,8 +149,8 @@ def main():
     # Start training
     trainer.train()
 
-    # Save the final model
-    trainer.save_model()
+    # Save the final model and tokenizer
+    model.save_pretrained(OUTPUT_DIR)
     tokenizer.save_pretrained(OUTPUT_DIR)
 
 if __name__ == "__main__":
