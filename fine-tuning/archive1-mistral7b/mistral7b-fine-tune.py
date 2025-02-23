@@ -5,6 +5,7 @@ from transformers import (
     AutoTokenizer,
     TrainingArguments,
     Trainer,
+    DataCollatorForLanguageModeling
 )
 from peft import (
     get_peft_model,
@@ -77,7 +78,7 @@ def main():
         evaluation_strategy="no",
         remove_unused_columns=True,
         ddp_find_unused_parameters=False,
-        report_to="none"  # Disable wandb logging
+        report_to="none",  # Disable wandb logging
     )
 
     # Load and prepare data
@@ -108,6 +109,7 @@ def main():
 
     # Enable gradient checkpointing for memory efficiency
     model.gradient_checkpointing_enable()
+    model.enable_input_require_grads()  # Enable gradients for input
 
     def tokenize_function(examples):
         """Tokenize the text and return pytorch tensors."""
@@ -125,25 +127,18 @@ def main():
         remove_columns=dataset.column_names
     )
 
-    # Function to move batch to correct device
-    def collate_fn(examples):
-        # Convert input_ids and attention_mask to tensors
-        input_ids = torch.tensor([example['input_ids'] for example in examples])
-        attention_mask = torch.tensor([example['attention_mask'] for example in examples])
-
-        # Move to appropriate device
-        return {
-            'input_ids': input_ids.to(device),
-            'attention_mask': attention_mask.to(device),
-            'labels': input_ids.to(device)  # For casual language modeling
-        }
+    # Use the transformers data collator instead of custom collate_fn
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False  # We're doing causal language modeling, not masked
+    )
 
     # Initialize trainer
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_dataset,
-        data_collator=collate_fn
+        data_collator=data_collator
     )
 
     # Start training
