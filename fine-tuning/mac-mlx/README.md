@@ -9,7 +9,46 @@ Reference
 
 ## 2025-02-23
 
-### Second attempt
+### Attempt 3
+
+Full training data from google voice - saved 10% for validation.
+
+(venv) john:arm64:mistral7b-mlx/$ python -m mlx_lm.lora --model mlx-community/Mistral-7B-Instruct-v0.2-4bit --data ~/workspace/model-training-sandbox/2025-02-23-mistral-attempt/data/mistral-mlx-test/ --train --num-layers 16 --iters 200
+Loading pretrained model
+Fetching 7 files: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 7/7 [00:00<00:00, 60411.79it/s]
+Loading datasets
+Training
+Trainable parameters: 0.047% (3.408M/7241.732M)
+Starting training..., iters: 200
+Iter 1: Val loss 8.492, Val took 40.666s
+Iter 10: Train loss 7.781, Learning Rate 1.000e-05, It/sec 0.265, Tokens/sec 53.382, Trained Tokens 2013, Peak mem 8.153 GB
+Iter 20: Train loss 4.352, Learning Rate 1.000e-05, It/sec 0.307, Tokens/sec 57.686, Trained Tokens 3889, Peak mem 8.153 GB
+Iter 30: Train loss 3.565, Learning Rate 1.000e-05, It/sec 0.327, Tokens/sec 54.906, Trained Tokens 5569, Peak mem 8.153 GB
+Iter 40: Train loss 3.207, Learning Rate 1.000e-05, It/sec 0.325, Tokens/sec 56.502, Trained Tokens 7305, Peak mem 8.153 GB
+Iter 50: Train loss 3.008, Learning Rate 1.000e-05, It/sec 0.302, Tokens/sec 58.883, Trained Tokens 9257, Peak mem 8.153 GB
+Iter 60: Train loss 3.017, Learning Rate 1.000e-05, It/sec 0.270, Tokens/sec 46.275, Trained Tokens 10969, Peak mem 8.153 GB
+Iter 70: Train loss 2.901, Learning Rate 1.000e-05, It/sec 0.340, Tokens/sec 56.821, Trained Tokens 12641, Peak mem 8.153 GB
+Iter 80: Train loss 2.970, Learning Rate 1.000e-05, It/sec 0.264, Tokens/sec 56.190, Trained Tokens 14773, Peak mem 8.153 GB
+Iter 90: Train loss 3.005, Learning Rate 1.000e-05, It/sec 0.315, Tokens/sec 57.099, Trained Tokens 16586, Peak mem 8.153 GB
+Iter 100: Train loss 2.910, Learning Rate 1.000e-05, It/sec 0.305, Tokens/sec 53.447, Trained Tokens 18338, Peak mem 8.153 GB
+Iter 100: Saved adapter weights to adapters/adapters.safetensors and adapters/0000100_adapters.safetensors.
+Iter 110: Train loss 2.837, Learning Rate 1.000e-05, It/sec 0.301, Tokens/sec 52.017, Trained Tokens 20069, Peak mem 8.153 GB
+Iter 120: Train loss 3.020, Learning Rate 1.000e-05, It/sec 0.472, Tokens/sec 52.109, Trained Tokens 21173, Peak mem 8.153 GB
+Iter 130: Train loss 2.912, Learning Rate 1.000e-05, It/sec 0.368, Tokens/sec 53.963, Trained Tokens 22640, Peak mem 8.153 GB
+Iter 140: Train loss 2.846, Learning Rate 1.000e-05, It/sec 0.342, Tokens/sec 55.824, Trained Tokens 24272, Peak mem 8.153 GB
+Iter 150: Train loss 2.805, Learning Rate 1.000e-05, It/sec 0.381, Tokens/sec 55.988, Trained Tokens 25740, Peak mem 8.153 GB
+Iter 160: Train loss 2.842, Learning Rate 1.000e-05, It/sec 0.337, Tokens/sec 56.448, Trained Tokens 27416, Peak mem 8.153 GB
+Iter 170: Train loss 2.913, Learning Rate 1.000e-05, It/sec 0.341, Tokens/sec 56.031, Trained Tokens 29057, Peak mem 8.366 GB
+Iter 180: Train loss 3.011, Learning Rate 1.000e-05, It/sec 0.270, Tokens/sec 58.740, Trained Tokens 31229, Peak mem 8.366 GB
+Iter 190: Train loss 2.853, Learning Rate 1.000e-05, It/sec 0.373, Tokens/sec 56.753, Trained Tokens 32749, Peak mem 8.366 GB
+Iter 200: Val loss 2.929, Val took 41.560s
+Iter 200: Train loss 2.909, Learning Rate 1.000e-05, It/sec 1.572, Tokens/sec 483.299, Trained Tokens 35823, Peak mem 11.668 GB
+Iter 200: Saved adapter weights to adapters/adapters.safetensors and adapters/0000200_adapters.safetensors.
+Saved final weights to adapters/adapters.safetensors.
+(venv) john:arm64:mistral7b-mlx/$
+
+
+### Attempt 2
 
 (venv) john:arm64:mistral7b-mlx/$ python -m mlx_lm.lora --model mlx-community/Mistral-7B-Instruct-v0.2-4bit --data ~/workspace/data-train/mistral-mlx-test/ --train --num-layers 16 --iters 70
 Loading pretrained model
@@ -34,8 +73,7 @@ Saved final weights to adapters/adapters.safetensors.
 (venv) john:arm64:mistral7b-mlx/$
 
 
-
-### First attempt
+### Attempt 1
 
 (venv) john:arm64:mistral7b-mlx/$ python -m mlx_lm.lora --model mlx-community/Mistral-7B-Instruct-v0.2-4bit --data ~/workspace/data-train/mistral-mlx-test/ --train --num-layers 16 --iters 100
 Loading pretrained model

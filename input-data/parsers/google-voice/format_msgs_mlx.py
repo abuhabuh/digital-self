@@ -1,4 +1,6 @@
 """
+My Parsed Google Voice format -> Apple MLX Trainig format
+
 Operates on output files of directory parser that parses raw html google voice
 dumps. Takes the output files and formats them according to Apple MLX training
 format.
@@ -11,14 +13,14 @@ import json
 from datetime import datetime, timedelta
 
 # Configuration
-INPUT_DIR = "input_jsons"  # Directory containing JSON files
-OUTPUT_DIR = "output_jsons"  # Directory to save processed files
+INPUT_DIR = "/Users/john.wang/workspace/model-training-sandbox/2025-02-23-mistral-attempt/data/input_jsons"  # Directory containing JSON files
+OUTPUT_DIR = "/Users/john.wang/workspace/model-training-sandbox/2025-02-23-mistral-attempt/data/output_jsons"  # Directory to save processed files
 TIME_THRESHOLD = timedelta(hours=2)  # Messages within 12 hours are grouped
 
 # Ensure output directory exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-def process_json_file(input_filepath, output_filepath):
+def process_json_file(input_filepath, train_filepath, valid_filepath):
     # Load JSON file
     with open(input_filepath, "r") as f:
         messages = json.load(f)
@@ -64,9 +66,6 @@ def process_json_file(input_filepath, output_filepath):
                 # Keep adding to current group
                 current_group.append(msg)
 
-    if current_group:
-        grouped_messages.append(current_group)
-
     # Merge consecutive messages from the same user within each group
     transformed_groups = []
 
@@ -97,17 +96,24 @@ def process_json_file(input_filepath, output_filepath):
         transformed_groups.append(merged_group)
 
     # Save the transformed JSON file
-    with open(output_filepath, "w") as f:
-        for grp in transformed_groups:
-            f.write(json.dumps({"messages": grp}) + '\n')
+    with open(train_filepath, "a") as train_fp:
+        with open(valid_filepath, "a") as valid_fp:
+            cnt = 1
+            for grp in transformed_groups:
+                if cnt % 10 == 0:
+                    valid_fp.write(json.dumps({"messages": grp}) + '\n')
+                else:
+                    train_fp.write(json.dumps({"messages": grp}) + '\n')
+                cnt += 1
 
 # Process all JSON files in the input directory
 for filename in os.listdir(INPUT_DIR):
     if filename.endswith(".json"):
         input_path = os.path.join(INPUT_DIR, filename)
-        output_path = os.path.join(OUTPUT_DIR, "new-" + filename)
-        process_json_file(input_path, output_path)
-        print(f"Processed: {filename} → {output_path}")
+        train_output_path = os.path.join(OUTPUT_DIR, "train.jsonl")
+        valid_output_path = os.path.join(OUTPUT_DIR, "valid.jsonl")
+        process_json_file(input_path, train_output_path, valid_output_path)
+        print(f"Processed: {filename}")
 
 print("All files processed successfully!")
 
