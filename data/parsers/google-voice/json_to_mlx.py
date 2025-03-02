@@ -4,8 +4,6 @@ My Parsed Google Voice format -> Apple MLX Trainig format
 Operates on output files of directory parser that parses raw html google voice
 dumps. Takes the output files and formats them according to Apple MLX training
 format.
-
-
 """
 
 import os
