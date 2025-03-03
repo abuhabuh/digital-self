@@ -11,14 +11,29 @@ import json
 from datetime import datetime, timedelta
 
 # Configuration
-INPUT_DIR = "/Users/john.wang/workspace/model-training-sandbox/2025-02-23-mistral-attempt/data/input_jsons"  # Directory containing JSON files
-OUTPUT_DIR = "/Users/john.wang/workspace/model-training-sandbox/2025-02-23-mistral-attempt/data/output_jsons"  # Directory to save processed files
-TIME_THRESHOLD = timedelta(hours=2)  # Messages within 12 hours are grouped
+# Directory containing JSON files
+INPUT_DIR = '/Users/john.wang/workspace/model-training-sandbox/data/input-jsons'
+# Directory to save processed files
+OUTPUT_DIR = '/Users/john.wang/workspace/model-training-sandbox/data/output-jsons'
+TIME_THRESHOLD = timedelta(hours=12)  # Messages within 12 hours are grouped
 
 # Ensure output directory exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+
+def get_chat_buddy_name(fpath):
+    n = fpath.split('/')[-1]
+    n = n.split('.')[0]
+    n = n.split('-')[0]
+    n = n.strip()
+    if n.lower() == 'misc':
+        n = 'Stranger'
+    return n
+
+
 def process_json_file(input_filepath, train_filepath, valid_filepath):
+    chat_buddy_name = get_chat_buddy_name(input_filepath)
+
     # Load JSON file
     with open(input_filepath, "r") as f:
         messages = json.load(f)
@@ -26,6 +41,8 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
     # Convert timestamps to datetime objects
     for msg in messages:
         msg["timestamp"] = datetime.fromisoformat(msg["timestamp"])
+        if msg['role'] == 'user':
+            msg['name'] = chat_buddy_name
 
     # Sort messages by timestamp
     messages.sort(key=lambda x: x["timestamp"])
@@ -37,24 +54,20 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
     for msg in messages:
         if not current_group:
             if msg["role"] == "user":
-                current_group.append(msg)
+                current_group = [msg]
             else:
                 continue
         else:
             last_msg_time = current_group[-1]["timestamp"]
             last_role = current_group[-1]["role"]
             curr_role = msg["role"]
-            """
-            Append if role matches and time is within threshold
-            Otherwise, break: only add to grouped messages if current group
-              meets standard
-            """
-            if (curr_role == 'user' and last_role == 'assistant') or \
-                    msg["timestamp"] - last_msg_time > TIME_THRESHOLD:
-                # Done with current group, append if relevant
-                if last_role == 'assistant':
-                    # This means we've picked up a set of user msgs and then
-                    # a set of assistant msgs
+
+            if msg["timestamp"] - last_msg_time > TIME_THRESHOLD:
+                # Try to save out the block
+                tmp_set = set()
+                [tmp_set.add(msg['role']) for msg in current_group]
+                if len(tmp_set) == 2:
+                    # if we have two roles ('user', 'assistant'), then include
                     grouped_messages.append(current_group)
                 if curr_role == 'user':
                     current_group = [msg]
@@ -62,36 +75,50 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
                     current_group = []
             else:
                 # Keep adding to current group
-                current_group.append(msg)
+                if curr_role == last_role:
+                    current_group[-1]['content'] += f'. {msg['content']}'
+                else:
+                    current_group.append(msg)
+    if current_group:
+        tmp_set = set()
+        [tmp_set.add(msg['role']) for msg in current_group]
+        if len(tmp_set) == 2:
+            # if we have two roles ('user', 'assistant'), then include
+            grouped_messages.append(current_group)
 
-    # Merge consecutive messages from the same user within each group
-    transformed_groups = []
-
-    for group in grouped_messages:
-        merged_group = []
-        current_message = group[0]  # Start with the first message
-
-        for msg in group[1:]:
-            if msg["role"] == current_message["role"]:
-                # Merge content
-                current_message["content"] += ". " + msg["content"]
-            else:
-                # Append the last merged message and start a new one
-                merged_group.append({
-                    "role": current_message["role"],
-                    "content": current_message["content"],
-                    # "timestamp": current_message["timestamp"].isoformat()
-                })
-                current_message = msg
-
-        # Append the last message in the group
-        merged_group.append({
-            "role": current_message["role"],
-            "content": current_message["content"],
-            # "timestamp": current_message["timestamp"].isoformat()
-        })
-
-        transformed_groups.append(merged_group)
+#    # Merge consecutive messages from the same user within each group
+#    transformed_groups = []
+#
+#    for group in grouped_messages:
+#        merged_group = []
+#        current_message = group[0]  # Start with the first message
+#
+#        for msg in group[1:]:
+#            if msg["role"] == current_message["role"]:
+#                # Merge content
+#                current_message["content"] += ". " + msg["content"]
+#            else:
+#                # Append the last merged message and start a new one
+#                merged_group.append({
+#                    "role": current_message["role"],
+#                    "content": current_message["content"],
+#                    # "timestamp": current_message["timestamp"].isoformat()
+#                })
+#                current_message = msg
+#
+#        # Append the last message in the group
+#        merged_group.append({
+#            "role": current_message["role"],
+#            "content": current_message["content"],
+#            # "timestamp": current_message["timestamp"].isoformat()
+#        })
+#
+#        transformed_groups.append(merged_group)
+    for g in grouped_messages:
+        for item in g:
+            del item['timestamp']
+            del item['phone']
+    transformed_groups = grouped_messages
 
     # Save the transformed JSON file
     with open(train_filepath, "a") as train_fp:
@@ -105,11 +132,15 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
                 cnt += 1
 
 # Process all JSON files in the input directory
+train_output_path = os.path.join(OUTPUT_DIR, "train.jsonl")
+valid_output_path = os.path.join(OUTPUT_DIR, "valid.jsonl")
+with open(train_output_path, "w") as train_fp:
+    pass
+with open(valid_output_path, "w") as valid_fp:
+    pass
 for filename in os.listdir(INPUT_DIR):
     if filename.endswith(".json"):
         input_path = os.path.join(INPUT_DIR, filename)
-        train_output_path = os.path.join(OUTPUT_DIR, "train.jsonl")
-        valid_output_path = os.path.join(OUTPUT_DIR, "valid.jsonl")
         process_json_file(input_path, train_output_path, valid_output_path)
         print(f"Processed: {filename}")
 
