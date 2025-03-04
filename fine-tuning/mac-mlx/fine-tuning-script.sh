@@ -3,13 +3,9 @@
 # USAGE EXAMPLE (2025-03-01): ./fine-tuning-script.sh mlx-community/Llama-3.2-1B-Instruct-4bit ~/workspace/model-training-sandbox/data/mlx-test/ /Users/john.wang/workspace/model-training-sandbox/llama-3.2-1B-2025-02-27/john-llama-chat-1
 
 
-# Ollama model name to write out
-OLLAMA_MODEL_NAME="john-named-chat-mistral-5"
-
-
 # Check if the correct number of arguments is provided
-if [ "$#" -ne 3 ]; then
-  echo "Usage: $0 <hugging-face-model> <data-directory> <model-output-dir>"
+if [ "$#" -ne 4 ]; then
+  echo "Usage: $0 <hugging-face-model> <data-directory> <model-output-dir> <ollama-model-name>"
   exit 1
 fi
 
@@ -17,6 +13,8 @@ fi
 HF_MODEL="$1"
 DATA_DIR="$2"
 MODEL_OUTPUT_DIR="$3"
+# Ollama model name to create
+OLLAMA_MODEL_NAME="$4"
 
 ######
 # Train the model

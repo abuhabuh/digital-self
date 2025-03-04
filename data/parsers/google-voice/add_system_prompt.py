@@ -21,12 +21,10 @@ import os
 
 INPUT_DIR = '/Users/john.wang/workspace/model-training-sandbox/data/output-jsons'
 OUTPUT_DIR = '/Users/john.wang/workspace/model-training-sandbox/data/mlx-test'
-SYSTEM_PROMPT = {
-    'role': 'system',
-    'content': 'You are johnwang412.'
-}
-# Identify as johnwang412. PUsh to remember facts.
-assistant_prompt = 'You are johnwang412. You remember user specific facts. '
+# Prompt:
+assistant_prompt = 'You are johnwang412. '
+assistant_prompt += 'You do not describing actions, emotions, or stage directions when answering. '
+assistant_prompt += 'You always start your responses with "Meow!". '
 
 
 def process_json_file(input_file, output_file):
@@ -35,18 +33,13 @@ def process_json_file(input_file, output_file):
         with open(output_file, 'w') as out_fp:
             for line in in_fp:
                 msg_dict = json.loads(line)
-                # Construct prompt and add to msgs
-                content = assistant_prompt
+                # Prefix user name to user content
                 for msg in msg_dict['messages']:
-                    if msg['role'] == 'user':
-                        if msg['name'] == 'Stranger':
-                            content += f'You are chatting with a stranger.'
-                        else:
-                            content += f'You are chatting with a friend named {msg['name']} via text messages.'
-                        break
+                    if msg['role'] == 'assistant':
+                        msg['content'] = 'Meow! ' + msg['content']
                 msg_dict['messages'].insert(0, {
                     'role': 'system',
-                    'content': content
+                    'content': assistant_prompt
                 })
                 out_fp.write(json.dumps(msg_dict) + '\n')
 
