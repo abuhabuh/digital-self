@@ -5,6 +5,8 @@ import os
 import shutil
 import pdb
 import argparse
+import threading
+import subprocess
 
 import sounddevice as sd
 import numpy as np
@@ -13,7 +15,8 @@ import wave
 
 
 class AudioRecorder:
-    def __init__(self, threshold_db=-30, sample_rate=44100, channels=1, amplification=1.0):
+    def __init__(self, device_name, threshold_db=-30, sample_rate=44100, channels=1, amplification=1.0):
+        self.device_name = device_name
         self.threshold_db = threshold_db
         self.sample_rate = sample_rate
         self.channels = channels
@@ -34,7 +37,7 @@ class AudioRecorder:
     def get_bluetooth_device_id(self):
         devices = sd.query_devices()
         for i, device in enumerate(devices):
-            if 'Samson RXD wireless receiver' == device['name']:
+            if self.device_name == device['name']:
                 print(f'found device name: {device["name"]}, id: {i}')
                 self.last_device_name = device['name']
                 return i
@@ -65,10 +68,9 @@ class AudioRecorder:
     def audio_callback(self, indata, frames, time, status):
         if status:
             if isinstance(status, sd.CallbackAbort):
-                print("\nDevice disconnected. Attempting to reconnect...")
-                self.handle_disconnect()
-                return
-            print(f"\nStatus: {status}")
+                raise Exception(
+                    f'Device disconnect detected - used to handle here, ' \
+                    f'but now unhandled. Status: {status}')
 
         if not self.recording:
             self.start_new_recording()
@@ -117,13 +119,13 @@ class AudioRecorder:
                         self.mp3_buffer += segment
 
         except Exception as e:
-            print(f"\nError in audio callback: {e}")
+            print(f"\nDisconnecting. Error in audio callback: {e}")
             self.handle_disconnect()
 
     def handle_disconnect(self):
         """Handle device disconnection and initiate reconnection"""
         if self.stream:
-            print(f'Device disconnect detected - closing stream and trying reconnect')
+            print(f'Device disconnect detected - closing stream and trying reconnect...')
             self.stream.close()
         self.stream = None
 
@@ -172,6 +174,18 @@ class AudioRecorder:
         )
         self.stream.start()
 
+        """Monitor device disconnection via commandline tool instead of 
+        sounddevice since sounddevice is unreliable for real time device
+        status monitoring.
+        """
+        monitor_thread = monitor_bluetooth_device(
+            self.device_name,
+            on_disconnect=self.handle_disconnect,
+            check_interval=1
+        )
+        # Keep main thread alive
+        monitor_thread.join()
+
     def start_new_recording(self):
         self.wrote_audio = False
         self.recording = True
@@ -218,10 +232,50 @@ class AudioRecorder:
             if self.stream:
                 self.stream.close()
 
+
+def detect_bluetooth_disconnection(device_name):
+    """
+    Detect Bluetooth device disconnection on iOS using system_profiler
+    
+    :param device_name: Name of the Bluetooth device to monitor
+    :return: Boolean indicating if device is disconnected
+    """
+    try:
+        result = subprocess.run(['ioreg', '-p', 'IOUSB'], 
+                                capture_output=True, text=True)
+        return device_name not in result.stdout
+    except Exception as e:
+        print(f"Error detecting device: {e}")
+        return False
+    
+
+def monitor_bluetooth_device(device_name, on_disconnect, check_interval):
+    """
+    Monitor a Bluetooth device for disconnection
+    
+    :param device_name: Name of the Bluetooth device
+    :param on_disconnect: Optional callback when device disconnects
+    :param check_interval: Seconds between connection checks
+    """
+    def monitoring_loop():
+        while True:
+            if detect_bluetooth_disconnection(device_name):
+                print(f"Bluetooth device disconnected: {device_name}")
+                if on_disconnect:
+                    on_disconnect()
+                break
+            time.sleep(check_interval)
+
+    # Start monitoring in a separate thread
+    thread = threading.Thread(target=monitoring_loop)
+    thread.start()
+    return thread
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Audio Recorder")
     parser.add_argument("--output-dir", type=str, required=True, help="Directory to save recordings")
     args = parser.parse_args()
 
-    recorder = AudioRecorder(threshold_db=-50, amplification=2)
+    recorder = AudioRecorder(device_name='Samson RXD wireless receiver', threshold_db=-50, amplification=2)
     recorder.start_recording(args.output_dir)
