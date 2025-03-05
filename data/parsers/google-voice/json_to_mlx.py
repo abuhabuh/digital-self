@@ -1,5 +1,5 @@
 """
-My Parsed Google Voice format -> Apple MLX Trainig format
+My Parsed Google Voice format -> Apple MLX Training format
 
 Operates on output files of directory parser that parses raw html google voice
 dumps. Takes the output files and formats them according to Apple MLX training
@@ -8,18 +8,12 @@ format.
 
 import os
 import json
+import sys
 from datetime import datetime, timedelta
+import argparse
 
 # Configuration
-# Directory containing JSON files
-INPUT_DIR = '/Users/john.wang/workspace/model-training-sandbox/data/input-jsons'
-# Directory to save processed files
-OUTPUT_DIR = '/Users/john.wang/workspace/model-training-sandbox/data/output-jsons'
 TIME_THRESHOLD = timedelta(hours=12)  # Messages within 12 hours are grouped
-
-# Ensure output directory exists
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
 
 def get_chat_buddy_name(fpath):
     n = fpath.split('/')[-1]
@@ -29,7 +23,6 @@ def get_chat_buddy_name(fpath):
     if n.lower() == 'misc':
         n = 'Stranger'
     return n
-
 
 def process_json_file(input_filepath, train_filepath, valid_filepath):
     chat_buddy_name = get_chat_buddy_name(input_filepath)
@@ -76,6 +69,7 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
             else:
                 # Keep adding to current group
                 if curr_role == last_role:
+                    # Merge consecutive messages from the same role
                     current_group[-1]['content'] += f'. {msg['content']}'
                 else:
                     current_group.append(msg)
@@ -86,34 +80,6 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
             # if we have two roles ('user', 'assistant'), then include
             grouped_messages.append(current_group)
 
-#    # Merge consecutive messages from the same user within each group
-#    transformed_groups = []
-#
-#    for group in grouped_messages:
-#        merged_group = []
-#        current_message = group[0]  # Start with the first message
-#
-#        for msg in group[1:]:
-#            if msg["role"] == current_message["role"]:
-#                # Merge content
-#                current_message["content"] += ". " + msg["content"]
-#            else:
-#                # Append the last merged message and start a new one
-#                merged_group.append({
-#                    "role": current_message["role"],
-#                    "content": current_message["content"],
-#                    # "timestamp": current_message["timestamp"].isoformat()
-#                })
-#                current_message = msg
-#
-#        # Append the last message in the group
-#        merged_group.append({
-#            "role": current_message["role"],
-#            "content": current_message["content"],
-#            # "timestamp": current_message["timestamp"].isoformat()
-#        })
-#
-#        transformed_groups.append(merged_group)
     for g in grouped_messages:
         for item in g:
             del item['timestamp']
@@ -131,18 +97,31 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
                     train_fp.write(json.dumps({"messages": grp}) + '\n')
                 cnt += 1
 
-# Process all JSON files in the input directory
-train_output_path = os.path.join(OUTPUT_DIR, "train.jsonl")
-valid_output_path = os.path.join(OUTPUT_DIR, "valid.jsonl")
-with open(train_output_path, "w") as train_fp:
-    pass
-with open(valid_output_path, "w") as valid_fp:
-    pass
-for filename in os.listdir(INPUT_DIR):
-    if filename.endswith(".json"):
-        input_path = os.path.join(INPUT_DIR, filename)
-        process_json_file(input_path, train_output_path, valid_output_path)
-        print(f"Processed: {filename}")
+def main(input_dir, output_dir):
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
 
-print("All files processed successfully!")
+    # Process all JSON files in the input directory
+    train_output_path = os.path.join(output_dir, "train.jsonl")
+    valid_output_path = os.path.join(output_dir, "valid.jsonl")
+    with open(train_output_path, "w") as train_fp:
+        pass
+    with open(valid_output_path, "w") as valid_fp:
+        pass
+    for filename in os.listdir(input_dir):
+        if filename.endswith(".json"):
+            input_path = os.path.join(input_dir, filename)
+            process_json_file(input_path, train_output_path, valid_output_path)
+            print(f"Processed: {filename}")
 
+    print("All files processed successfully!")
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description="Convert Google Voice JSON to Apple MLX format.")
+    parser.add_argument("--input_dir", required=True, help="Directory containing input JSON files.")
+    parser.add_argument("--output_dir", required=True, help="Directory to save output JSONL files.")
+    
+    args = parser.parse_args()
+    
+    main(input_dir=args.input_dir, output_dir=args.output_dir)

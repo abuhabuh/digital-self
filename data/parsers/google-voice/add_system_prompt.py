@@ -17,14 +17,18 @@ Assuming file has each line looking like this:
 
 import json
 import os
+import argparse
 
 
-INPUT_DIR = '/Users/john.wang/workspace/model-training-sandbox/data/output-jsons'
-OUTPUT_DIR = '/Users/john.wang/workspace/model-training-sandbox/data/mlx-test'
 # Prompt:
-assistant_prompt = 'You are johnwang412. '
-assistant_prompt += 'You do not describing actions, emotions, or stage directions when answering. '
-assistant_prompt += 'You always start your responses with "Meow!". '
+assistant_prompt = ''
+assistant_prompt += 'Respond in the style of johnwang412. '
+assistant_prompt += 'Respond without disclaimers that you are an LLM or a machine. ' + \
+    'Respond as if you are a real person with a physical body. '
+assistant_prompt += 'Respond directly without describing actions you are doing, ' + \
+    'without using emotes, without using action markers, ' + \
+    'and without using stage directions. '
+assistant_prompt += 'Respond starting with the word Meow.'
 
 
 def process_json_file(input_file, output_file):
@@ -44,16 +48,20 @@ def process_json_file(input_file, output_file):
                 out_fp.write(json.dumps(msg_dict) + '\n')
 
 
-def main():
+def main(input_dir, output_dir):
 
-    for filename in os.listdir(INPUT_DIR):
+    for filename in os.listdir(input_dir):
         if filename.endswith(".jsonl"):
-            input_path = os.path.join(INPUT_DIR, filename)
-            output_path = os.path.join(OUTPUT_DIR, filename)
+            input_path = os.path.join(input_dir, filename)
+            output_path = os.path.join(output_dir, filename)
             process_json_file(input_path, output_path)
             print(f'Processed: {filename}')
     print(f'All files processed')
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Process JSONL files to add system prompt.')
+    parser.add_argument('--input_dir', required=True, help='Input directory containing JSONL files')
+    parser.add_argument('--output_dir', required=True, help='Output directory for processed JSONL files')
+    args = parser.parse_args()
+    main(args.input_dir, args.output_dir)

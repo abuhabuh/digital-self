@@ -4,6 +4,7 @@ from datetime import datetime
 import os
 import shutil
 import pdb
+import argparse
 
 import sounddevice as sd
 import numpy as np
@@ -30,10 +31,11 @@ class AudioRecorder:
         # Whether we've written audio to the buffer (and not just silence)
         self.wrote_audio = False
 
-    def get_bluetooth_device(self):
+    def get_bluetooth_device_id(self):
         devices = sd.query_devices()
         for i, device in enumerate(devices):
             if 'Samson RXD wireless receiver' == device['name']:
+                print(f'found device name: {device["name"]}, id: {i}')
                 self.last_device_name = device['name']
                 return i
         raise ValueError("No Bluetooth input device found")
@@ -179,11 +181,10 @@ class AudioRecorder:
         print(f"\nStarted new recording: {self.current_file}")
         print()  # Add an extra line for the meter
 
-    def save_current_file(self):
+    def save_current_file(self, out_dir):
         if not self.wrote_audio:
             return
 
-        out_dir = '/Users/john.wang/Documents/00 my outputs'
         if self.mp3_buffer and self.current_file:
             os.makedirs(out_dir, exist_ok=True)
             filepath = os.path.join(out_dir, self.current_file)
@@ -191,10 +192,10 @@ class AudioRecorder:
             print(f"\nSaved recording: {filepath}")
             self.mp3_buffer = AudioSegment.empty()
 
-    def start_recording(self):
+    def start_recording(self, out_dir):
         try:
             self.running = True
-            self.device_id = self.get_bluetooth_device()
+            self.device_id = self.get_bluetooth_device_id()
             print(f"Using device: {sd.query_devices(self.device_id)['name']}")
 
             self.create_stream()
@@ -208,7 +209,7 @@ class AudioRecorder:
             print("\nRecording stopped.")
             self.running = False
             if self.recording:
-                self.save_current_file()
+                self.save_current_file(out_dir)
             if self.stream:
                 self.stream.close()
         except Exception as e:
@@ -218,5 +219,9 @@ class AudioRecorder:
                 self.stream.close()
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Audio Recorder")
+    parser.add_argument("--output-dir", type=str, required=True, help="Directory to save recordings")
+    args = parser.parse_args()
+
     recorder = AudioRecorder(threshold_db=-50, amplification=2)
-    recorder.start_recording()
+    recorder.start_recording(args.output_dir)

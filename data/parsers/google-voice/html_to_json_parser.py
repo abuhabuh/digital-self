@@ -4,11 +4,14 @@ for LLM fine tuning
 Includes a few extra fields.
 """
 
-import os
-import json
-from bs4 import BeautifulSoup
-from datetime import datetime
+import argparse
 from collections import defaultdict
+from datetime import datetime
+import json
+import os
+
+from bs4 import BeautifulSoup
+
 
 def parse_html_chat(file_path):
     """
@@ -54,7 +57,7 @@ def process_directory(directory_path):
 
     # Walk through directory
     for filename in os.listdir(directory_path):
-        if filename.endswith('.html'):
+        if '- Text -' in filename and filename.endswith('.html'):
             # Get prefix (everything before first '-')
             prefix = filename.split('-')[0]
 
@@ -82,11 +85,7 @@ def save_grouped_messages(grouped_messages, output_directory):
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(sorted_messages, f, indent=2)
 
-def main():
-    # Directory containing HTML files
-    input_directory = "chat_logs"  # Change this to your input directory
-    output_directory = "processed_chats"  # Change this to your desired output directory
-
+def main(input_directory, output_directory):
     # Process all files and group by prefix
     grouped_messages = process_directory(input_directory)
 
@@ -94,4 +93,11 @@ def main():
     save_grouped_messages(grouped_messages, output_directory)
 
 if __name__ == "__main__":
-    main()
+
+    parser = argparse.ArgumentParser(description="Convert Google Voice HTML dump files to JSON format.")
+    parser.add_argument('--input_dir', type=str, required=True, help="Directory containing HTML files")
+    parser.add_argument('--output_dir', type=str, required=True, help="Directory to save processed JSON files")
+
+    args = parser.parse_args()
+
+    main(args.input_dir, args.output_dir)
