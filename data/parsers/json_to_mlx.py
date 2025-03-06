@@ -22,6 +22,44 @@ import argparse
 TIME_THRESHOLD = timedelta(hours=12)  # Messages within 12 hours are grouped
 
 
+class MessageGroup:
+    def __init__(self, add_names):
+        self.group = []
+        self.add_names = add_names
+
+    def add_message(self, msg):
+        if self.add_names and msg["role"] == "user":
+            msg['content'] = f'{msg["name"]} said: ' + msg['content']
+        self.group.append(msg)
+
+    def merge_message(self, msg):
+        last_msg = self.group[-1]
+        if msg["role"] == "assistant":
+            last_msg['content'] += f'. {msg["content"]}'
+        else:
+            if msg["name"] == last_msg["name"]:
+                last_msg['content'] += f'. {msg["content"]}'
+            else:
+                name_content = f'{msg["name"]} said: ' if self.add_names else ''
+                last_msg['content'] += f'. {name_content}{msg["content"]}'
+                last_msg['name'] = msg["name"]
+
+    def reset(self):
+        self.group = []
+
+    def is_empty(self):
+        return len(self.group) == 0
+
+    def get_last_message(self):
+        return self.group[-1]
+
+    def get_roles(self):
+        return set(msg['role'] for msg in self.group)
+
+    def get_group(self):
+        return self.group
+
+
 def process_json_file(input_filepath, train_filepath, valid_filepath):
     # Load JSON file
     with open(input_filepath, "r") as f:
@@ -41,63 +79,34 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
 
     # Group messages
     grouped_messages = []
-    current_group = []
+    current_group = MessageGroup(add_names)
 
     for msg in messages:
         curr_role = msg["role"]
-        curr_name = msg["name"]
 
-        if not current_group:
+        if current_group.is_empty():
             if curr_role == "user":
-                if add_names: msg['content'] = f'{curr_name} said: ' + msg['content']
-                current_group = [msg]
+                current_group.add_message(msg)
             else:
                 continue
         else:
-            last_msg_time = current_group[-1]["timestamp"]
-            last_role = current_group[-1]["role"]
-            last_name = current_group[-1]["name"]
+            last_msg_time = current_group.get_last_message()["timestamp"]
+            last_role = current_group.get_last_message()["role"]
 
             if msg["timestamp"] - last_msg_time > TIME_THRESHOLD:
-                # Try to save out the block
-                tmp_set = set()
-                [tmp_set.add(msg['role']) for msg in current_group]
-                if len(tmp_set) == 2:
-                    # if we have two roles ('user', 'assistant'), then include
-                    # else do nothing and current_group gets reset
-                    grouped_messages.append(current_group)
-                # reset current_group
+                if len(current_group.get_roles()) == 2:
+                    grouped_messages.append(current_group.get_group())
+                current_group.reset()
                 if curr_role == 'user':
-                    if add_names: msg['content'] = f'{curr_name} said: ' + msg['content']
-                    current_group = [msg]
-                else:
-                    current_group = []
+                    current_group.add_message(msg)
             else:
-                # Keep adding to current group
                 if curr_role == last_role:
-                    # Merge consecutive messages from the same role
-                    if curr_role == 'assistant':
-                        current_group[-1]['content'] += f'. {msg['content']}'
-                    else:
-                        if curr_name == last_name:
-                            current_group[-1]['content'] += f'. {msg['content']}'
-                        else:
-                            name_content = ''
-                            if add_names: name_content = f'{curr_name} said: '
-                            tmp_content = f'. {name_content}' + msg['content']
-                            current_group[-1]['content'] += tmp_content
-                            current_group[-1]['name'] = curr_name
+                    current_group.merge_message(msg)
                 else:
-                    if curr_role == 'user' and add_names:
-                        msg['content'] = f'{curr_name} said: ' + msg['content']
-                    current_group.append(msg)
+                    current_group.add_message(msg)
 
-    if current_group:
-        tmp_set = set()
-        [tmp_set.add(msg['role']) for msg in current_group]
-        if len(tmp_set) == 2:
-            # if we have two roles ('user', 'assistant'), then include
-            grouped_messages.append(current_group)
+    if not current_group.is_empty() and len(current_group.get_roles()) == 2:
+        grouped_messages.append(current_group.get_group())
 
     for g in grouped_messages:
         for item in g:
