@@ -1,74 +1,130 @@
+import re
 import os
 import json
-from datetime import datetime
+import argparse
+import datetime
+from collections import defaultdict
 
-def parse_slack_message(message):
-    """
-    Parse a single Slack message into the desired format.
-    Only process messages that have user_profile information.
-    """
-    # Skip system messages or messages without proper user profile
-    if 'user_profile' not in message or 'subtype' in message:
+def convert_timestamp(ts):
+    """Convert Unix timestamp to ISO 8601 format."""
+    try:
+        timestamp = float(ts)
+        dt = datetime.datetime.fromtimestamp(timestamp, datetime.timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.000+00:00")
+    except (ValueError, TypeError):
+        return ts
+
+def process_message(message):
+    """Process a single message and return formatted output message."""
+    # Skip messages with empty text
+    if not message.get("text"):
         return None
-
-    # Extract the required fields
-    return {
-        'name': message['user_profile']['real_name'],
-        'content': message['text'],
-        'timestamp': datetime.fromtimestamp(float(message['ts'])).strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Skip messages without user_profile
+    if "user_profile" not in message:
+        return None
+    
+    # Create output message
+    name = message["user_profile"].get("real_name", "Unknown")
+    role = "assistant" if name == "John Wang" else "user"
+    
+    output_message = {
+        "user_id": message["user"],
+        "name": name,
+        "role": role,
+        "timestamp": convert_timestamp(message.get("ts")),
+        "content": message["text"]
     }
+    
+    return output_message
 
-def process_chat_file(input_file_path):
-    """
-    Process a single chat file and return list of parsed messages.
-    """
-    with open(input_file_path, 'r', encoding='utf-8') as file:
-        chat_data = json.load(file)
+def process_file(input_path, output_path):
+    """Process a single JSON file."""
+    with open(input_path, 'r', encoding='utf-8') as f:
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON in file: {input_path}")
+            return
+    
+    if not isinstance(data, list):
+        print(f"Warning: Expected a list in {input_path}, got {type(data)}")
+        return
+    
+    output_messages = []
+    messages_with_replies = {}
+    users = {}
+    
+    # Track parent messages and their replies
+    for message in data:
+        processed_message = process_message(message)
+        if processed_message:
+            output_messages.append(processed_message)
+            users[processed_message["user_id"]] = processed_message["name"]
+            
+            # Check if this message has replies
+            if "replies" in message:
+                # Store the parent message and its replies
+                messages_with_replies[message["ts"]] = {
+                    "parent": processed_message,
+                    "replies": []
+                }
+    
+    # Process replies
+    for message in data:
+        if "thread_ts" in message and message.get("thread_ts") in messages_with_replies:
+            # This is a reply to a parent message
+            processed_reply = process_message(message)
+            if processed_reply:
+                messages_with_replies[message["thread_ts"]]["replies"].append(processed_reply)
 
-    # Process each message in the chat data
-    parsed_messages = []
-    for message in chat_data:
-        parsed_message = parse_slack_message(message)
-        if parsed_message:  # Only add if message was successfully parsed
-            parsed_messages.append(parsed_message)
+    # Add parent messages with their replies to the end of the output
+    for thread_data in messages_with_replies.values():
+        replies = thread_data["replies"]
+        if replies:  # Only add if there are actual replies
+            output_messages += replies
+    
+    # Replace user mentions with real names
+    for msg in output_messages:
+        matches = re.findall(r"<@([A-Z0-9]+)>", msg['content'])
+        if matches:
+            content = msg['content']
+            for match in matches:
+                content = content.replace(f"<@{match}>", users.get(match, f"<@{match}>"))
+            msg['content'] = content
 
-    return parsed_messages
+    # Write output to file
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(output_messages, f, indent=2)
 
-def process_directory(directory_path, output_path):
-    """
-    Process all JSON files in the directory and create corresponding output files.
-    """
-    # Iterate through all files in the directory
-    for filename in os.listdir(directory_path):
-        if filename.endswith('.json'):
-            input_file_path = os.path.join(directory_path, filename)
-            output_filename = f"../{output_path}/output-{filename}"
-            output_file_path = os.path.join(directory_path, output_filename)
-
-            try:
-                # Process the file
-                parsed_messages = process_chat_file(input_file_path)
-
-                # Write the processed messages to output file
-                with open(output_file_path, 'w', encoding='utf-8') as outfile:
-                    json.dump(parsed_messages, outfile, indent=2)
-
-                print(f"Successfully processed {filename} -> {output_filename}")
-
-            except Exception as e:
-                print(f"Error processing {filename}: {str(e)}")
+def process_directory(input_dir, output_dir):
+    """Process all JSON files in a directory."""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    for root, dirs, files in os.walk(input_dir):
+        for file in files:
+            if file.endswith('.json'):
+                # Get the full path to the input file
+                input_path = os.path.join(root, file)
+                
+                # Create the output path based on the input path
+                rel_path = os.path.relpath(input_path, input_dir)
+                output_filename = '-'.join(rel_path.split(os.path.sep)).replace('.json', '') + '.json'
+                output_path = os.path.join(output_dir, output_filename)
+                
+                print(f"Processing: {input_path} -> {output_path}")
+                process_file(input_path, output_path)
 
 def main():
-    # Directory containing the chat files
-    directory_path = "chat_files"  # Change this to your input directory
-    output_path = 'output'
-
-    # Create directory if it doesn't exist
-    os.makedirs(directory_path, exist_ok=True)
-    os.makedirs(output_path, exist_ok=True)
-
-    # Process all files in the directory
-    process_directory(directory_path, output_path)
+    parser = argparse.ArgumentParser(description='Process JSON files from input directory to output directory.')
+    parser.add_argument('--input_dir', required=True, help='Input directory containing JSON files')
+    parser.add_argument('--output_dir', required=True, help='Output directory for processed JSON files')
+    
+    args = parser.parse_args()
+    
+    process_directory(args.input_dir, args.output_dir)
+    print("Processing complete.")
 
 if __name__ == "__main__":
     main()

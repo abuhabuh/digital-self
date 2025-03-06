@@ -3,7 +3,7 @@ import json
 from ollama import chat
 
 
-model_name = 'john-ollama-3.1:1'
+model_name = 'john-ollama-3.1:2'
 # model_name = 'john-chat-mistral-4'
 
 prefix = ''

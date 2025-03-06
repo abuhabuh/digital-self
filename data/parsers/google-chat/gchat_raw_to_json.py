@@ -7,6 +7,7 @@ import glob
 from datetime import datetime
 import hashlib
 import re
+import argparse
 
 def parse_timestamp(timestamp_str):
     """Convert the timestamp string to Unix timestamp (seconds since epoch)."""
@@ -18,7 +19,7 @@ def parse_timestamp(timestamp_str):
 def get_sanitized_filename(names):
     """Generate a filename from participant names, ensuring it's valid."""
     # Sort to ensure consistent naming regardless of the order names appear
-    sorted_names = sorted(names)
+    sorted_names = sorted(['_'.join(name.split(' ')) for name in names])
     # Join with dashes and replace any invalid filename characters
     filename = "-".join(sorted_names)
     # Replace characters not allowed in filenames
@@ -81,15 +82,20 @@ def process_messages_file(file_path, output_dir):
         print(f"Error processing {file_path}: {str(e)}")
 
 def main():
-    # Define the root directory to search and output directory
-    root_dir = "/Users/john.wang/Desktop/Takeout/Google Chat/Groups"  # Current directory, change if needed
-    output_dir = os.path.join('.', "processed_chats")
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Process Google Chat messages JSON files.")
+    parser.add_argument('--input_dir', required=True, help="Root directory to search for messages.json files")
+    parser.add_argument('--output_dir', required=True, help="Directory to save processed JSON files")
+    args = parser.parse_args()
+
+    input_dir = args.input_dir
+    output_dir = args.output_dir
 
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
 
     # Find all messages.json files in subdirectories
-    message_files = glob.glob(os.path.join(root_dir, "**", "messages.json"), recursive=True)
+    message_files = glob.glob(os.path.join(input_dir, "**", "messages.json"), recursive=True)
 
     if not message_files:
         print("No messages.json files found.")

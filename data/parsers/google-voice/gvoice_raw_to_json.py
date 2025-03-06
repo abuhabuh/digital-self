@@ -13,7 +13,7 @@ import os
 from bs4 import BeautifulSoup
 
 
-def parse_html_chat(file_path):
+def parse_html_chat(file_path, chat_buddy_name: str):
     """
     Parse a single HTML chat file and return a list of message objects.
     """
@@ -27,9 +27,9 @@ def parse_html_chat(file_path):
         # Extract timestamp
         timestamp = message_div.find('abbr', class_='dt')['title']
 
-        # Extract phone number
-        phone_link = message_div.find('a', class_='tel')
-        phone_number = phone_link['href'].replace('tel:', '') if phone_link else None
+        # # Extract phone number
+        # phone_link = message_div.find('a', class_='tel')
+        # phone_number = phone_link['href'].replace('tel:', '') if phone_link else None
 
         # Check if message is from "Me"
         is_me = message_div.find('abbr', class_='fn') and message_div.find('abbr', class_='fn').text.strip() == 'Me'
@@ -40,8 +40,8 @@ def parse_html_chat(file_path):
         message = {
             "role": "assistant" if is_me else "user",
             "content": content,
-            "phone": phone_number,
-            "timestamp": timestamp
+            "timestamp": timestamp,
+            "name": 'John Wang' if is_me else chat_buddy_name,
         }
 
         messages.append(message)
@@ -59,12 +59,13 @@ def process_directory(directory_path):
     for filename in os.listdir(directory_path):
         if '- Text -' in filename and filename.endswith('.html'):
             # Get prefix (everything before first '-')
-            prefix = filename.split('-')[0]
+            prefix = filename.split('-')[0].strip()
 
             # Parse file and add messages to appropriate group
             file_path = os.path.join(directory_path, filename)
-            messages = parse_html_chat(file_path)
+            messages = parse_html_chat(file_path, prefix)
             grouped_messages[prefix].extend(messages)
+            print(f'Processed: {prefix}')
 
     return grouped_messages
 

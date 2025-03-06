@@ -16,45 +16,45 @@ MODEL_OUTPUT_DIR="$3"
 # Ollama model name to create
 OLLAMA_MODEL_NAME="$4"
 
-# ######
-# # Train the model
-# #
-# echo ""
-# echo "************************************************"
-# echo "Training $HF_MODEL on data: $DATA_DIR"
-# echo "************************************************"
-# echo ""
-# # Activate virtual env for mlx tuning
-# source venv/bin/activate
-# # Clear the output directory
-# rm -rf $MODEL_OUTPUT_DIR/*
-# # time run
-# start_time=$(date +%s)
-# # Run fine tunning
-# python -m mlx_lm.lora \
-#        --model $HF_MODEL \
-#        --data $DATA_DIR \
-#        --adapter-path $MODEL_OUTPUT_DIR/adapters \
-#        --train \
-#        --num-layers 16 \
-#        --iters 100
-# # time run
-# end_time=$(date +%s)
-# elapsed_time=$((end_time - start_time))
-# # calculate and display execution time
-# echo ""
-# echo "   *********************************************"
-# echo "   Model training time: $elapsed_time seconds"
-# echo "   *********************************************"
-# echo ""
-# # Fuse adapters into model
-# python -m mlx_lm.fuse \
-#        --model $HF_MODEL \
-#        --adapter-path $MODEL_OUTPUT_DIR/adapters \
-#        --save-path $MODEL_OUTPUT_DIR \
-#        --de-quantize  # de-quantize so we can convert to ollama
-# # Deactivate virtual env
-# deactivate
+######
+# Train the model
+#
+echo ""
+echo "************************************************"
+echo "Training $HF_MODEL on data: $DATA_DIR"
+echo "************************************************"
+echo ""
+# Activate virtual env for mlx tuning
+source venv/bin/activate
+# Clear the output directory
+rm -rf $MODEL_OUTPUT_DIR/*
+# time run
+start_time=$(date +%s)
+# Run fine tunning
+python -m mlx_lm.lora \
+       --model $HF_MODEL \
+       --data $DATA_DIR \
+       --adapter-path $MODEL_OUTPUT_DIR/adapters \
+       --train \
+       --num-layers 16 \
+       --iters 100
+# time run
+end_time=$(date +%s)
+elapsed_time=$((end_time - start_time))
+# calculate and display execution time
+echo ""
+echo "   *********************************************"
+echo "   Model training time: $elapsed_time seconds"
+echo "   *********************************************"
+echo ""
+# Fuse adapters into model
+python -m mlx_lm.fuse \
+       --model $HF_MODEL \
+       --adapter-path $MODEL_OUTPUT_DIR/adapters \
+       --save-path $MODEL_OUTPUT_DIR \
+       --de-quantize  # de-quantize so we can convert to ollama
+# Deactivate virtual env
+deactivate
 
 ######
 # Convert to ollama
