@@ -84,8 +84,9 @@ def process_file(input_path, output_path):
         if replies:  # Only add if there are actual replies
             output_messages += replies
     
-    # Replace user mentions with real names
+    # Replace user mentions with real names and remove 'user_id' field
     for msg in output_messages:
+        del msg["user_id"]
         matches = re.findall(r"<@([A-Z0-9]+)>", msg['content'])
         if matches:
             content = msg['content']

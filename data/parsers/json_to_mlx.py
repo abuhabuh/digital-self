@@ -21,31 +21,44 @@ import argparse
 # Configuration
 TIME_THRESHOLD = timedelta(hours=12)  # Messages within 12 hours are grouped
 
-
 class MessageGroup:
-    def __init__(self, add_names):
+    def __init__(self):
         self.group = []
-        self.add_names = add_names
+        self.member_names = set()
+        self.user_message_count = 0
+        
+        # Number of user messages remembered before a reply from the assistant
+        # (limit this incase there is a long chain of dialogue before assistant
+        # replies in the training data - e.g., slack channels where there's a
+        # ton of back and forth before I reply.)
+        self.consecutive_user_msg_limit = 20
 
     def add_message(self, msg):
-        if self.add_names and msg["role"] == "user":
-            msg['content'] = f'{msg["name"]} said: ' + msg['content']
-        self.group.append(msg)
-
-    def merge_message(self, msg):
-        last_msg = self.group[-1]
-        if msg["role"] == "assistant":
-            last_msg['content'] += f'. {msg["content"]}'
+        if msg['role'] == 'user':
+            self.user_message_count += 1
+            if self.user_message_count > self.consecutive_user_msg_limit:
+                # Iterate backwards to find the first user message before an assistant message
+                i = len(self.group) - 1
+                i -= 19
+                if i < 0:
+                    raise Exception(
+                        'Unexpected error: user msg cnt greater than msgs')
+                if i - 1 >= 0 and self.group[i - 1]['role'] == 'user':
+                    raise Exception(
+                        'Unexpected error: earliest user msg is not after '
+                        'assistant msg')
+                # All checks pass, so pop the earliest message
+                self.group.pop(i)
+                self.user_message_count -= 1
         else:
-            if msg["name"] == last_msg["name"]:
-                last_msg['content'] += f'. {msg["content"]}'
-            else:
-                name_content = f'{msg["name"]} said: ' if self.add_names else ''
-                last_msg['content'] += f'. {name_content}{msg["content"]}'
-                last_msg['name'] = msg["name"]
+            self.user_message_count = 0
+
+        self.group.append(msg)
+        self.member_names.add(msg['name'])
 
     def reset(self):
         self.group = []
+        self.user_message_count = 0
 
     def is_empty(self):
         return len(self.group) == 0
@@ -59,6 +72,32 @@ class MessageGroup:
     def get_group(self):
         return self.group
 
+    def merge_messages(self):
+        """Merge messages so that we alternate 'user', 'assistant' roles
+        First message should always be from a 'user' role
+        """
+        if not self.group:
+            return []
+        is_group = len(self.member_names) > 2
+
+        if is_group:
+            self.group[0]['content'] = f'{self.group[0]["name"]} said: ' + self.group[0]['content']
+        merged_group = [self.group[0]]
+        for msg in self.group[1:]:
+            last_msg = merged_group[-1]
+            if msg["role"] == last_msg["role"]:
+                if msg["role"] == "user" and msg["name"] != last_msg["name"]:
+                    msg['content'] = f'{msg["name"]} said: ' + msg['content']
+                    last_msg['name'] = msg['name']
+                last_msg['content'] += f'. {msg["content"]}'
+            else:
+                if msg["role"] == "user" and is_group:
+                    msg['content'] = f'{msg["name"]} said: ' + msg['content']
+                merged_group.append(msg)
+
+        self.group = merged_group
+        return self.group
+
 
 def process_json_file(input_filepath, train_filepath, valid_filepath):
     # Load JSON file
@@ -66,20 +105,15 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
         messages = json.load(f)
 
     # Convert timestamps to datetime objects
-    names = set()
     for msg in messages:
         msg["timestamp"] = datetime.fromisoformat(msg["timestamp"])
-        names.add(msg["name"])
-    add_names = False
-    if len(names) > 2:
-        add_names = True
 
     # Sort messages by timestamp
     messages.sort(key=lambda x: x["timestamp"])
 
     # Group messages
     grouped_messages = []
-    current_group = MessageGroup(add_names)
+    current_group = MessageGroup()
 
     for msg in messages:
         curr_role = msg["role"]
@@ -95,18 +129,15 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
 
             if msg["timestamp"] - last_msg_time > TIME_THRESHOLD:
                 if len(current_group.get_roles()) == 2:
-                    grouped_messages.append(current_group.get_group())
+                    grouped_messages.append(current_group.merge_messages())
                 current_group.reset()
                 if curr_role == 'user':
                     current_group.add_message(msg)
             else:
-                if curr_role == last_role:
-                    current_group.merge_message(msg)
-                else:
-                    current_group.add_message(msg)
+                current_group.add_message(msg)
 
     if not current_group.is_empty() and len(current_group.get_roles()) == 2:
-        grouped_messages.append(current_group.get_group())
+        grouped_messages.append(current_group.merge_messages())
 
     for g in grouped_messages:
         for item in g:

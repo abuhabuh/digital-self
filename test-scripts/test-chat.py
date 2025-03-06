@@ -20,16 +20,6 @@ msgs = [
     {"role": "system", "content": prefix},
 ]
 
-
-#for i in range(0,5):
-#    msgs = [{
-#        'role': 'user', 'content': prefix + 'let\'s go out just the two of us'
-#    }]
-#    print(f'Running: {msgs}')
-#    response = chat(model_name, messages=msgs)
-#    print(response['message']['content'])
-#    print('')
-
 print(f'Initial prompt msgs: {json.dumps(msgs, indent=2)}')
 
 while True:
