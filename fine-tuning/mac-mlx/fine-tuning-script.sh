@@ -31,13 +31,15 @@ rm -rf $MODEL_OUTPUT_DIR/*
 # time run
 start_time=$(date +%s)
 # Run fine tunning
+set -x
 python -m mlx_lm.lora \
        --model $HF_MODEL \
        --data $DATA_DIR \
        --adapter-path $MODEL_OUTPUT_DIR/adapters \
        --train \
        --num-layers 16 \
-       --iters 100
+       --iters 80
+set +x
 # time run
 end_time=$(date +%s)
 elapsed_time=$((end_time - start_time))
@@ -48,11 +50,13 @@ echo "   Model training time: $elapsed_time seconds"
 echo "   *********************************************"
 echo ""
 # Fuse adapters into model
+set -x
 python -m mlx_lm.fuse \
        --model $HF_MODEL \
        --adapter-path $MODEL_OUTPUT_DIR/adapters \
        --save-path $MODEL_OUTPUT_DIR \
        --de-quantize  # de-quantize so we can convert to ollama
+set +x
 # Deactivate virtual env
 deactivate
 
@@ -68,9 +72,11 @@ echo ""
 LLAMA_CPP_DIR=~/workspace/other-repos/llama.cpp
 source $LLAMA_CPP_DIR/venv/bin/activate
 # Convert to gguf
+set -x
 python $LLAMA_CPP_DIR/convert_hf_to_gguf.py $MODEL_OUTPUT_DIR \
        --outfile $MODEL_OUTPUT_DIR/ollama_model.gguf \
        --outtype q8_0
+set +x
 # Create Modelfile
 echo "FROM ./ollama_model.gguf" > $MODEL_OUTPUT_DIR/Modelfile
 # Deactivate virtual env
@@ -85,5 +91,7 @@ echo "Create ollama model"
 echo "************************************************"
 echo ""
 
+set -x
 ollama create $OLLAMA_MODEL_NAME -f $MODEL_OUTPUT_DIR/Modelfile
+set +x
 

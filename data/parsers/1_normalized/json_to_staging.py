@@ -155,7 +155,7 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
                     train_fp.write(json.dumps({"messages": grp}) + '\n')
                 cnt += 1
 
-def main(input_dir, output_dir):
+def main(input_dir: str, output_dir: str):
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
@@ -186,4 +186,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    main(input_dir=args.input_dir, output_dir=args.output_dir)
+    main(
+        input_dir=args.input_dir, 
+        output_dir=args.output_dir,
+    )
