@@ -14,12 +14,12 @@ Things done:
 import glob
 import os
 import json
-import sys
 from datetime import datetime, timedelta
 import argparse
 
-# Configuration
-TIME_THRESHOLD = timedelta(hours=12)  # Messages within 12 hours are grouped
+### Configuration
+# Messages within 2 hours are grouped - msgs 2 hrs apart are likley not related
+TIME_THRESHOLD = timedelta(hours=2)
 
 class MessageGroup:
     def __init__(self):
@@ -86,7 +86,7 @@ class MessageGroup:
         for msg in self.group[1:]:
             last_msg = merged_group[-1]
             if msg["role"] == last_msg["role"]:
-                if msg["role"] == "user" and msg["name"] != last_msg["name"]:
+                if is_group and msg["role"] == "user" and msg["name"] != last_msg["name"]:
                     msg['content'] = f'{msg["name"]} said: ' + msg['content']
                     last_msg['name'] = msg['name']
                 last_msg['content'] += f'. {msg["content"]}'
@@ -125,8 +125,7 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
                 continue
         else:
             last_msg_time = current_group.get_last_message()["timestamp"]
-            last_role = current_group.get_last_message()["role"]
-
+            
             if msg["timestamp"] - last_msg_time > TIME_THRESHOLD:
                 if len(current_group.get_roles()) == 2:
                     grouped_messages.append(current_group.merge_messages())
