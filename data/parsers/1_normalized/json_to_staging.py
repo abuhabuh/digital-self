@@ -20,6 +20,8 @@ import argparse
 ### Configuration
 # Messages within 2 hours are grouped - msgs 2 hrs apart are likley not related
 TIME_THRESHOLD = timedelta(hours=2)
+# DMS_ONLY means we only process DMs and skip group msgs
+DMS_ONLY = True
 
 class MessageGroup:
     def __init__(self):
@@ -128,7 +130,8 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
             
             if msg["timestamp"] - last_msg_time > TIME_THRESHOLD:
                 if len(current_group.get_roles()) == 2:
-                    grouped_messages.append(current_group.merge_messages())
+                    if not DMS_ONLY or len(current_group.member_names) == 2:
+                        grouped_messages.append(current_group.merge_messages())
                 current_group.reset()
                 if curr_role == 'user':
                     current_group.add_message(msg)
@@ -136,7 +139,8 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
                 current_group.add_message(msg)
 
     if not current_group.is_empty() and len(current_group.get_roles()) == 2:
-        grouped_messages.append(current_group.merge_messages())
+        if not DMS_ONLY or len(current_group.member_names) == 2:
+            grouped_messages.append(current_group.merge_messages())
 
     for g in grouped_messages:
         for item in g:
@@ -155,6 +159,7 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
                 cnt += 1
 
 def main(input_dir: str, output_dir: str):
+    print(f'Processing started ...')
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
@@ -173,7 +178,7 @@ def main(input_dir: str, output_dir: str):
         if filename.endswith(".json"):
             input_path = os.path.join(input_dir, filename)
             process_json_file(input_path, train_output_path, valid_output_path)
-            print(f"Processed: {filename}")
+            # print(f"Processed: {filename}")
 
     print("All files processed successfully!")
 
