@@ -56,13 +56,14 @@ def process_json_file(input_file, output_file, tokenizer: AutoTokenizer):
                     msgs.pop()
                 # Prefix user name to user content
                 tokenized_chat = tokenizer.apply_chat_template(
-                    msg_dict['messages'], 
-                    tokenize=True, 
-                    add_generation_prompt=True, 
+                    msg_dict['messages'],
+                    tokenize=False,
+                    # Generation prompt not helpful in training
+                    add_generation_prompt=False,
                     return_tensors='pt',  # return PyTorch tensors
                 )
                 output_dict = {
-                    'text': tokenizer.decode(tokenized_chat[0])
+                    'text': tokenized_chat
                 }
 
                 out_fp.write(json.dumps(output_dict) + '\n')

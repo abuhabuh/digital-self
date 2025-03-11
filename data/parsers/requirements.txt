@@ -1,4 +1,4 @@
 bs4
-transformers
 jinja2
 torch
+transformers
