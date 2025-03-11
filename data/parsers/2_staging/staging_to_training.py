@@ -19,10 +19,12 @@ import json
 import os
 import argparse
 
+from transformers import AutoTokenizer
+
 
 # Prompt:
 prompt_list = [
-    'You always prefix your responses with the word "Meow! ".'
+    # 'You always prefix your responses with the word "Meow! ".'
     # 'You are a real person named John Wang.',
     # 'Respond directly without describing your physical actions, ' + \
     #     'without using emotes, without using action markers, ' + \
@@ -40,64 +42,43 @@ for p in prompt_list:
     assistant_prompt += p + ' '
 
 
-def format_llama(msg_dict) -> str:
-    for msg in msg_dict['messages']:
-        # Update the assistant response if needed
-        if msg['role'] == 'assistant':
-            msg['content'] = 'Meow! ' + msg['content']
-        del msg['name']
-    if assistant_prompt:
-        msg_dict['messages'].insert(0, {
-            'role': 'system',
-            'content': assistant_prompt
-        })
-    return json.dumps(msg_dict) + '\n'
-
-
-def format_mistral(msg_dict) -> str:
-    # instruction = 'You always prefix your responses with the word Meow. Please respond to the following comment: '
-    # template = '<s>[INST] {instruction} \n{user_input} \n[/INST]\n{response}</s>'
-    template = '<s>[INST] {user_input} [/INST] {response} </s>'
-
-    outputs = ''
-    i = 0
-    while i+1 < len(msg_dict['messages']):
-        user_msg = msg_dict['messages'][i]['content']
-        assistant_msg = msg_dict['messages'][i + 1]['content']
-        output_dict = {
-            'text': template.format(
-                user_input=user_msg, 
-                response=assistant_msg)
-        }
-        outputs += json.dumps(output_dict) + '\n'
-        i += 2
-
-    return outputs
-
-def process_json_file(input_file, output_file, model_type: str):
+def process_json_file(input_file, output_file, tokenizer: AutoTokenizer):
 
     with open(input_file, 'r') as in_fp:
         with open(output_file, 'w') as out_fp:
             for line in in_fp:
                 msg_dict = json.loads(line)
+                msgs = msg_dict['messages']
+                if not msgs:
+                    continue
+                if msgs[-1]['role'] == 'user':
+                    # If chat block ends with input from user, remove that
+                    msgs.pop()
                 # Prefix user name to user content
+                tokenized_chat = tokenizer.apply_chat_template(
+                    msg_dict['messages'], 
+                    tokenize=True, 
+                    add_generation_prompt=True, 
+                    return_tensors='pt',  # return PyTorch tensors
+                )
+                output_dict = {
+                    'text': tokenizer.decode(tokenized_chat[0])
+                }
 
-                output_str = ''
-                if model_type == 'llama':
-                    output_str = format_llama(msg_dict)
-                elif model_type == 'mistral':
-                    output_str = format_mistral(msg_dict)
-                out_fp.write(output_str)
+                out_fp.write(json.dumps(output_dict) + '\n')
 
 
-def main(input_dir, output_dir, model_type: str):
+def main(input_dir, output_dir, hf_model: str):
     """Picks up both the train.jsonl and valid.jsonl.
     """
+    print('Processing started ...')
+    tokenizer = AutoTokenizer.from_pretrained(hf_model)
+
     for filename in os.listdir(input_dir):
         if filename.endswith(".jsonl"):
             input_path = os.path.join(input_dir, filename)
             output_path = os.path.join(output_dir, filename)
-            process_json_file(input_path, output_path, model_type)
+            process_json_file(input_path, output_path, tokenizer)
             print(f'Processed: {filename}')
     print(f'All files processed')
 
@@ -106,11 +87,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process JSONL files to add system prompt.')
     parser.add_argument('--input_dir', required=True, help='Input directory containing JSONL files')
     parser.add_argument('--output_dir', required=True, help='Output directory for processed JSONL files')
-    parser.add_argument("--model_type", required=True, help="Model type which dicates JSONL format.")
+    parser.add_argument("--hf_model", required=True, help="Model type which dicates JSONL format.")
 
     args = parser.parse_args()
     main(
         args.input_dir,
         args.output_dir,
-        model_type=args.model_type,
-)
+        hf_model=args.hf_model,
+    )
