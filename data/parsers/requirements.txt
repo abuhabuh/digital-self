@@ -1,4 +1,6 @@
 bs4
 jinja2
+protobuf # requirement for transformer data formating for mistral 0.3
+sentencepiece # requirement for transformer data formating for mistral 0.3
 torch
 transformers

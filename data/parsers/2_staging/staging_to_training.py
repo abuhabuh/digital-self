@@ -22,26 +22,6 @@ import argparse
 from transformers import AutoTokenizer
 
 
-# Prompt:
-prompt_list = [
-    # 'You always prefix your responses with the word "Meow! ".'
-    # 'You are a real person named John Wang.',
-    # 'Respond directly without describing your physical actions, ' + \
-    #     'without using emotes, without using action markers, ' + \
-    #     'and without using stage directions. ',
-    # # 'Respond as if you are a real person with a physical body capable ' + \
-    # #     'of interacting with people and places in the real world. ',
-    # 'When asked to do something physical, respond as a real person would and ' + \
-    #     'pretend you can do things physically.',
-    # 'For group chats, recognize and address multiple participants by name ' + \
-    #     'when necessary.',
-    # 'Learn and recall key facts shared in converastions.',
-]
-assistant_prompt = ''
-for p in prompt_list:
-    assistant_prompt += p + ' '
-
-
 def process_json_file(input_file, output_file, tokenizer: AutoTokenizer):
 
     with open(input_file, 'r') as in_fp:
@@ -65,7 +45,7 @@ def process_json_file(input_file, output_file, tokenizer: AutoTokenizer):
                 output_dict = {
                     'text': tokenized_chat
                 }
-
+                
                 out_fp.write(json.dumps(output_dict) + '\n')
 
 
