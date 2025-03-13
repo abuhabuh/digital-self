@@ -14,7 +14,7 @@ import json
 import glob
 import re
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 from bs4 import BeautifulSoup
 
@@ -25,6 +25,15 @@ def parse_gchat_timestamp(timestamp_str):
     dt = datetime.strptime(timestamp_str, dt_format)
     return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "+00:00"
 
+def convert_slack_timestamp(ts):
+    """Convert Unix timestamp to ISO 8601 format."""
+    try:
+        timestamp = float(ts)
+        dt = datetime.fromtimestamp(timestamp, timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.000+00:00")
+    except (ValueError, TypeError):
+        return ts
+
 def get_sanitized_filename(names):
     """Generate a filename from participant names, ensuring it's valid."""
     # Sort to ensure consistent naming regardless of the order names appear
@@ -34,6 +43,15 @@ def get_sanitized_filename(names):
     # Replace characters not allowed in filenames
     filename = re.sub(r'[\\/*?:"<>|]', "_", filename)
     return filename
+
+def process_gchat_directory(input_dir: str, output_dir: str):
+    # Find all messages.json files
+    message_files = glob.glob(os.path.join(input_dir, "**", "messages.json"), recursive=True)
+
+    if message_files:
+        print(f"Found {len(message_files)} Google Chat files to process.")
+        for file_path in message_files:
+            process_gchat_file(file_path, output_dir)
 
 def process_gchat_file(file_path, output_dir):
     """Process a single Google Chat messages.json file."""
@@ -146,14 +164,19 @@ def process_gvoice_directory(directory_path, output_dir):
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(sorted_messages, f, indent=2)
 
-def convert_slack_timestamp(ts):
-    """Convert Unix timestamp to ISO 8601 format."""
-    try:
-        timestamp = float(ts)
-        dt = datetime.fromtimestamp(timestamp, datetime.timezone.utc)
-        return dt.strftime("%Y-%m-%dT%H:%M:%S.000+00:00")
-    except (ValueError, TypeError):
-        return ts
+def process_slack_directory(input_dir, output_dir):
+
+    for root, dirs, files in os.walk(input_dir):
+        base_dir = os.path.basename(root)
+        # Process Slack files
+        json_files = [f for f in files if f.endswith('.json')]
+        if json_files:
+            print(f"Found {len(json_files)} Slack files to process.")
+            for file in json_files:
+                input_path = os.path.join(root, file)
+                # Use the input filename for the output
+                output_path = os.path.join(output_dir, f'{base_dir}-{file}')
+                process_slack_file(input_path, output_path)
 
 def process_slack_message(message):
     """Process a single Slack message and return formatted output message."""
@@ -255,50 +278,29 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     # Process files based on their source directory
-    for root, dirs, files in os.walk(input_dir):
+    for dir_name in os.listdir(input_dir):
         # Determine the source type from the directory name
-        dir_name = os.path.basename(root)
+        print(f'directory: {dir_name}')
 
-        if dir_name == "google-chat":
+        if not os.path.isdir(os.path.join(input_dir, dir_name)):
             continue
-            # Create output subdirectory for Google Chat
-            gchat_output_dir = os.path.join(output_dir, "google-chat")
-            os.makedirs(gchat_output_dir, exist_ok=True)
-
-            # Find all messages.json files
-            message_files = glob.glob(os.path.join(root, "**", "messages.json"), recursive=True)
-
-            if message_files:
-                print(f"Found {len(message_files)} Google Chat files to process.")
-                for file_path in message_files:
-                    process_gchat_file(file_path, gchat_output_dir)
-
-        elif dir_name == "google-voice":
+        if dir_name not in ['google-chat', 'google-voice', 'slack']:
             continue
-            # Create output subdirectory for Google Voice
-            gvoice_output_dir = os.path.join(output_dir, "google-voice")
-            os.makedirs(gvoice_output_dir, exist_ok=True)
 
-            # Process Google Voice files
-            process_gvoice_directory(root, gvoice_output_dir)
+        files_output_dir = os.path.join(output_dir, dir_name)
+        os.makedirs(files_output_dir, exist_ok=True)
 
-        elif dir_name == "slack":
-            continue
-            # Create output subdirectory for Slack
-            slack_output_dir = os.path.join(output_dir, "slack")
-            os.makedirs(slack_output_dir, exist_ok=True)
+        # if dir_name == "google-chat":
+        #     process_gchat_directory(os.path.join(input_dir, dir_name), files_output_dir)
 
-            # Process Slack files
-            json_files = [f for f in files if f.endswith('.json')]
-            if json_files:
-                print(f"Found {len(json_files)} Slack files to process.")
-                for file in json_files:
-                    input_path = os.path.join(root, file)
-                    # Use the input filename for the output
-                    output_path = os.path.join(slack_output_dir, file)
-                    process_slack_file(input_path, output_path)
+        # if dir_name == "google-voice":
+        #     process_gvoice_directory(os.path.join(input_dir, dir_name), files_output_dir)
+
+        if dir_name == "slack":
+            process_slack_directory(os.path.join(input_dir, dir_name), files_output_dir)
 
     print(f"Processing complete. Output files are in {output_dir}")
+
 
 if __name__ == "__main__":
     main()
