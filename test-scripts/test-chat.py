@@ -48,23 +48,14 @@ def test_with_chat(hf_model: str, ollama_model: str):
 def test_with_generate(hf_model: str, ollama_model: str):
 
     inputs = [
-        'Carrie asked: Is the sky blue?',
-        'Dave said: I am going to the park.',
-        'Where is the library in Frederick, Maryland?',
-        'What\'s the most common ingredient on pizza?',
-        'A dog asked: how many bones can I fit in my mouth?',
-        'Marry said: I am going to the park.',
-        'Will said: I am going to the park.',
-        'Marry said: I need to pee.',
-        'Will said: I need to pee.',
-        'Will said: I am going to the park.',
-        'Will said: I need to pee.',
-        'Will said: Do you want to eat dinner with me?',
-        'Will said: How about we take a walk around the block?',
-        'Marry said: I am going to the park.',
-        'Marry said: I need to pee.',
-        'Marry said: Do you want to eat dinner with me?',
-        'Marry said: How about we take a walk around the block?',
+        'How many years did johnwang412 work at Petal?',
+        'How long were johnwang412 employed by Petal in total?',
+        'When did johnwang412\'s employment at Petal begin?',
+        'When did johnwang412 start working at Petal?',
+        'When did johnwang412 finish working at Petal?',
+        'What organization were johnwang412 affiliated with between 2018 and 2024?',
+        'When did johnwang412\'s tenure at Petal end?',
+        'Were johnwang412 working at Petal in 2019?',
     ]
 
     for input_str in inputs:
@@ -72,6 +63,7 @@ def test_with_generate(hf_model: str, ollama_model: str):
         print(f'Input: {input_str}')
         result = ollama.generate(ollama_model, prompt=input_str)
         print(f' > resp: {result.response}')
+        print('')
 
 
 def main():
@@ -79,7 +71,7 @@ def main():
     """
     # hf_model not used rn
     hf_model = 'mlx-community/Mistral-7B-Instruct-v0.3-4bit'
-    ollama_model = 'john-mistral-0.3-animals:1'
+    ollama_model = 'john-openchat-3.5:1'
 
     print(f'Running test with hf_model: {hf_model} and ollama_model: {ollama_model}')
 

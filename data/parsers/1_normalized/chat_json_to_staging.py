@@ -1,6 +1,24 @@
 """
 My Parsed Google Voice format -> Apple MLX Training format
 
+Each line should contain something like:
+{
+    "messages": [
+        {
+            "role": "system",
+            "content": "You are a helpful assistant."
+        },
+        {
+            "role": "user",
+            "content": "Hello."
+        },
+        {
+            "role": "assistant",
+            "content": "How can I assistant you today."
+        }
+    ]
+}
+
 Operates on output files of directory parser that parses raw html google voice
 dumps. Takes the output files and formats them according to Apple MLX training
 format.
@@ -9,6 +27,7 @@ Things done:
 - Aggregates messages within X hours into single block
 - Ensures messages alternate between user and assistant by combining
     consecutive messages from the same role
+- Groups all chats found into a single training file
 """
 
 import glob
@@ -28,7 +47,7 @@ class MessageGroup:
         self.group = []
         self.member_names = set()
         self.user_message_count = 0
-        
+
         # Number of user messages remembered before a reply from the assistant
         # (limit this incase there is a long chain of dialogue before assistant
         # replies in the training data - e.g., slack channels where there's a
@@ -127,7 +146,7 @@ def process_json_file(input_filepath, train_filepath, valid_filepath):
                 continue
         else:
             last_msg_time = current_group.get_last_message()["timestamp"]
-            
+
             if msg["timestamp"] - last_msg_time > TIME_THRESHOLD:
                 if len(current_group.get_roles()) == 2:
                     if not DMS_ONLY or len(current_group.member_names) == 2:
@@ -187,10 +206,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert Google Voice JSON to Apple MLX format.")
     parser.add_argument("--input_dir", required=True, help="Directory containing input JSON files.")
     parser.add_argument("--output_dir", required=True, help="Directory to save output JSONL files.")
-    
+
     args = parser.parse_args()
-    
+
     main(
-        input_dir=args.input_dir, 
+        input_dir=args.input_dir,
         output_dir=args.output_dir,
     )

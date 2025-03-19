@@ -1,7 +1,7 @@
 """
 Combined Chat Parser Script
 
-This script processes chat logs from three different sources:
+This script processes chat logs from sources like:
 1. Google Chat
 2. Google Voice
 3. Slack
