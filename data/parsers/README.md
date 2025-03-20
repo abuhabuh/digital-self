@@ -73,19 +73,13 @@ Ex input file: (from above)
 No scripts as this should represent the final output directory. Scripts are in
 the proper training format with appropriate instructions, formats, etc.
 
-Ex training file: (from above)
-    [
-      {
-        "role": "system",
-        "content": "You are a friendly chat bot.",
-      },
-      {
-        "role": "user",
-        "content": "hi, John! congrats on your new job!!!",
-      },
-      {
-        "role": "assistant",
-        "content": "Thanks! I start next Monday.",
-      },
-    ]
+Gemma sample:
 
+  ```
+  {"text": "<bos><start_of_turn>user\nawesome, thats a good amount of time. you have interviews and/or network connections lined up?<end_of_turn>\n<start_of_turn>model\nworking on that now. actually already have an offer from a company that's based there and  DC, lol. i want to do my due diligence and make sure i find the right project / culture fit<end_of_turn>\n<start_of_turn>user\ncool - its nice going there with at least one backup option. the trip sounds exciting, heh<end_of_turn>\n<start_of_turn>model\nyea dude, def come out for a wk if u have time. course, if everything works out and i move there, you're always welcome to crash<end_of_turn>\n"}
+  ```
+
+Llama sample:
+  ```
+  {"text": "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\nawesome, thats a good amount of time. you have interviews and/or network connections lined up?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\nworking on that now. actually already have an offer from a company that's based there and  DC, lol. i want to do my due diligence and make sure i find the right project / culture fit<|eot_id|><|start_header_id|>user<|end_header_id|>\n\ncool - its nice going there with at least one backup option. the trip sounds exciting, heh<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\nyea dude, def come out for a wk if u have time. course, if everything works out and i move there, you're always welcome to crash<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"}
+  ```
