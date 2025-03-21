@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  rag:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ${MARKDOWN_DIR:-../data}:/app/markdown_data
+    environment:
+      - MARKDOWN_DIR=/app/markdown_data
+      - CHROMA_DB_DIR=/app/data/chroma
+      - EMBEDDING_MODEL=sentence-transformers/all-mpnet-base-v2
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    command: api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
